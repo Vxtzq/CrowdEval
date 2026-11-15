@@ -14,6 +14,7 @@ from pathlib import Path
 import torch
 from safetensors.torch import load_file
 from transformers import AutoTokenizer
+from huggingface_hub import snapshot_download
 
 from lm_eval.evaluator import simple_evaluate
 from lm_eval.models.huggingface import HFLM
@@ -24,13 +25,16 @@ def git_text(repo: Path, *args: str) -> str:
 
 
 def lfs_oid(repo: Path, filename: str, revision: str) -> str:
-    pointer = subprocess.check_output(
-        ["git", "-C", str(repo), "show", f"{revision}:{filename}"], text=True
-    )
-    match = re.search(r"oid sha256:([0-9a-f]{64})", pointer)
-    if not match:
-        raise ValueError(f"No LFS SHA-256 in {revision}:{filename}")
-    return match.group(1)
+    try:
+        pointer = subprocess.check_output(
+            ["git", "-C", str(repo), "show", f"{revision}:{filename}"], text=True
+        )
+        match = re.search(r"oid sha256:([0-9a-f]{64})", pointer)
+        if not match:
+            raise ValueError(f"No LFS SHA-256 in {revision}:{filename}")
+        return match.group(1)
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return "unknown"
 
 
 def get_flat(filename: Path) -> torch.Tensor:
@@ -124,7 +128,11 @@ def load_crowd_model(
     )
     model.eval().to("cuda")
 
-    rev = git_text(repo, "rev-parse", "HEAD")
+    try:
+        rev = git_text(repo, "rev-parse", "HEAD")
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        rev = "unknown"
+
     metadata = {
         "revision": rev,
         "model_bf16_sha256": lfs_oid(repo, "model_bf16.safetensors", rev),
@@ -137,13 +145,22 @@ def load_crowd_model(
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    # CHANGED: Defaults to current directory and local results folder
-    parser.add_argument("--model-dir", type=Path, default=Path("."), help="Path to checkpoint (default: current dir)")
+    parser.add_argument(
+        "--model-dir", 
+        type=Path, 
+        default=None, 
+        help="Path to local checkpoint (default: auto-download from HF)"
+    )
     parser.add_argument("--tokenizer-dir", type=Path, default=None)
     parser.add_argument(
         "--code-dir", type=Path, default=Path(__file__).resolve().parent / "model_code"
     )
-    parser.add_argument("--output-dir", type=Path, default=Path("./results/json"), help="Where to save JSON (default: ./results/json)")
+    parser.add_argument(
+        "--output-dir", 
+        type=Path, 
+        default=Path("./results/json"), 
+        help="Where to save JSON (default: ./results/json)"
+    )
     parser.add_argument(
         "--tasks",
         default="hellaswag,piqa,arc_easy,winogrande,lambada_openai,mmlu",
@@ -158,17 +175,33 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    repo = args.model_dir.resolve()
+    # Auto-download if no local dir provided
+    if args.model_dir is None:
+        print("No --model-dir provided. Auto-downloading Vxtzq/Crowd-v1 from Hugging Face...")
+        repo_path = snapshot_download(repo_id="Vxtzq/Crowd-v1")
+        repo = Path(repo_path)
+    else:
+        repo = args.model_dir.resolve()
+
     args.output_dir.mkdir(parents=True, exist_ok=True)
     config_data = json.loads((repo / "config.json").read_text())
+    
     state_file = repo / "training_state.json"
     state = json.loads(state_file.read_text()) if state_file.exists() else config_data
-    step = int(state.get("globalStep", config_data.get("globalStep")))
+    step = int(state.get("globalStep", config_data.get("globalStep", 0)))
 
     print(f"Loading Crowd-v1 step {step} from {repo}", flush=True)
     tokenizer_dir = args.tokenizer_dir.resolve() if args.tokenizer_dir else None
+    
+    # Ensure code_dir exists; if not, download from HF (optional)
+    code_dir = args.code_dir.resolve()
+    if not (code_dir / "configuration_crowd.py").exists():
+        print(f"Warning: {code_dir} does not contain model code. Trying to use HF code...")
+        # Fallback: use the downloaded repo itself if it contains the code
+        code_dir = repo
+
     model, tokenizer, metadata = load_crowd_model(
-        repo, args.code_dir.resolve(), tokenizer_dir
+        repo, code_dir, tokenizer_dir
     )
     print(
         f"Loaded revision {metadata['revision']} ({metadata['parameter_count_loaded']} base params); "
@@ -176,9 +209,6 @@ def main() -> None:
         flush=True,
     )
 
-    # lm-eval right-pads causal batches. The causal attention mask prevents those
-    # trailing pad tokens from affecting real-token logits, so vectorized scoring
-    # remains equivalent to batch size one.
     lm = HFLM(
         pretrained=model,
         tokenizer=tokenizer,
@@ -239,21 +269,17 @@ def main() -> None:
         if not preferred:
             preferred = list(metrics)
         
-        # Console print (as before, showing top 2)
         values = ", ".join(f"{key}={metrics[key]}" for key in preferred[:2])
         print(f"{task}: {values}", flush=True)
 
-        # Markdown format (taking the primary metric)
         main_key = preferred[0]
         md_lines.append(f"| {task} | {main_key} | {metrics[main_key]:.4f} |")
 
-    # Save benchmark.txt if requested
     if args.benchmark:
         bench_dir = Path("results")
         bench_dir.mkdir(parents=True, exist_ok=True)
         bench_file = bench_dir / "benchmark.txt"
         
-        # If the file exists, append; otherwise write header
         mode = "a" if bench_file.exists() else "w"
         with open(bench_file, mode) as f:
             if mode == "a":
