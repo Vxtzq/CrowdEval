@@ -4,16 +4,26 @@ import glob
 from pathlib import Path
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
-import matplotlib.image as mpimg
+import matplotlib.patches as patches
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+import numpy as np
 
 # ==========================================
 # CONFIGURATION
 # ==========================================
 TASKS = ["mmlu", "hellaswag", "piqa", "arc_easy", "winogrande", "lambada_openai"]
+TASK_TITLES = {
+    "mmlu": ("MMLU", "General Knowledge"),
+    "hellaswag": ("HellaSwag", "Commonsense Reasoning"),
+    "piqa": ("PIQA", "Physical Interaction"),
+    "arc_easy": ("ARC-Easy", "Science Questions"),
+    "winogrande": ("WinoGrande", "Coreference Resolution"),
+    "lambada_openai": ("LAMBADA", "Word Prediction")
+}
+
 OUTPUT_PATH = "results/qwen_style_benchmark_grid.png"
 
-# Base-model scores from Qwen official reports
+# Base-model scores
 QWEN_BASELINES = {
     "Qwen2.5-0.5B": {
         "mmlu": 0.272, "hellaswag": 0.477, "piqa": 0.660, 
@@ -29,13 +39,20 @@ QWEN_BASELINES = {
     }
 }
 
-# You can download small PNG/SVG logos and put their paths here
-# If you don't have logos, the script will just use text labels.
-MODEL_LOGOS = {
-    "Crowd-v1": None, # e.g., "assets/crowd_logo.png"
-    "Qwen2.5-0.5B": None,
-    "Qwen3-0.6B": None,
-    "Qwen3.5-0.8B": None,
+# CONFIGURE LOGOS HERE
+LOGOS = {
+    "Crowd-v1": "assets/logos/crowd.png",
+    "Qwen2.5-0.5B": "assets/logos/qwen25.png",
+    "Qwen3-0.6B": "assets/logos/qwen3.png",
+    "Qwen3.5-0.8B": "assets/logos/qwen35.png",
+}
+
+# Colors based on your screenshot
+COLORS = {
+    "Crowd-v1": "#5B6CFF",      # Bright Blue
+    "Qwen2.5-0.5B": "#A0A6D4",  # Light Blue-Gray
+    "Qwen3-0.6B": "#C0C4D6",    # Lighter Gray
+    "Qwen3.5-0.8B": "#D0D3E0"   # Lightest Gray
 }
 
 def get_primary_metric(metrics: dict) -> float:
@@ -43,11 +60,29 @@ def get_primary_metric(metrics: dict) -> float:
         if k in metrics: return metrics[k]
     return 0.0
 
+def draw_bar(ax, x_pos, height, color, value, logo_path=None):
+    """Draws a single bar with value text and a logo."""
+    # Draw the bar
+    ax.bar(x_pos, height, width=0.6, color=color, zorder=2)
+    
+    # Add value text on top
+    ax.text(x_pos, height + 1.5, f"{value:.1f}", ha='center', va='bottom', 
+            fontsize=11, fontweight='bold', color='#333333')
+    
+    # Add Logo inside the bar
+    if logo_path and Path(logo_path).exists():
+        try:
+            img = plt.imread(logo_path)
+            imagebox = OffsetImage(img, zoom=0.08) 
+            ab = AnnotationBbox(imagebox, (x_pos, height * 0.85), frameon=False)
+            ax.add_artist(ab)
+        except Exception:
+            pass 
+
 def main():
-    # 1. Load the latest Crowd-v1 result
     json_files = glob.glob("results/json/*.json")
     if not json_files:
-        print("Error: No JSON files found in results/json/.")
+        print("Error: No JSON files found.")
         return
     
     latest_file = max(json_files, key=lambda f: Path(f).stat().st_mtime)
@@ -55,83 +90,73 @@ def main():
         res = json.load(f)
         
     step = res["step"]
-    crowd_name = f"Crowd-v1 (Step {step})"
+    crowd_key = "Crowd-v1"
     
-    # 2. Build the DataFrame
     data = []
     for task in TASKS:
-        # Crowd
         if task in res["results"]:
-            data.append({"Model": crowd_name, "Task": task, "Score": get_primary_metric(res["results"][task])})
-        # Qwen
+            data.append({"Model": crowd_key, "Task": task, "Score": get_primary_metric(res["results"][task]) * 100})
+        else:
+            data.append({"Model": crowd_key, "Task": task, "Score": 0.0})
+            
         for qwen_name, qwen_scores in QWEN_BASELINES.items():
-            data.append({"Model": qwen_name, "Task": task, "Score": qwen_scores[task]})
+            data.append({"Model": qwen_name, "Task": task, "Score": qwen_scores[task] * 100})
             
     df = pd.DataFrame(data)
-
-    # 3. Create the Grid (2 rows, 3 columns)
-    fig, axes = plt.subplots(2, 3, figsize=(18, 10), sharey=True)
+    
+    # Increased figsize height slightly and added hspace later to fit titles
+    fig, axes = plt.subplots(2, 3, figsize=(16, 10))
     axes = axes.flatten()
     
-    sns.set_theme(style="whitegrid")
+    plt.rcParams['font.sans-serif'] = "Arial"
+    models_order = ["Crowd-v1", "Qwen3.5-0.8B", "Qwen3-0.6B", "Qwen2.5-0.5B"]
     
-    # Define colors: Blue for Crowd, Grays/Oranges for Qwen
-    palette = {
-        crowd_name: "#2E86AB", 
-        "Qwen2.5-0.5B": "#E63946", 
-        "Qwen3-0.6B": "#F4A261", 
-        "Qwen3.5-0.8B": "#E9C46A"
-    }
-
     for i, task in enumerate(TASKS):
         ax = axes[i]
-        task_df = df[df["Task"] == task]
+        task_df = df[df["Task"] == task].set_index("Model").reindex(models_order).reset_index()
         
-        # Draw the bars
-        sns.barplot(
-            data=task_df, x="Model", y="Score", 
-            ax=ax, palette=palette, width=0.6
-        )
+        ax.set_facecolor("white")
         
-        # Formatting
-        ax.set_title(task.upper().replace("_", "-"), fontsize=14, fontweight="bold", pad=10)
-        ax.set_ylabel("Accuracy" if i % 3 == 0 else "")
-        ax.set_xlabel("")
-        ax.set_ylim(0, 1.0)
-        
-        # Rotate x-labels so they fit
-        ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right', fontsize=10)
-        
-        # Remove top and right spines for that clean look
-        sns.despine(ax=ax)
+        for j, row in task_df.iterrows():
+            model_name = row["Model"]
+            color = COLORS.get(model_name, "#CCCCCC")
+            draw_bar(ax, j, row["Score"], color, row["Score"], LOGOS.get(model_name))
 
-        # Add value labels on top of bars
-        for p in ax.patches:
-            height = p.get_height()
-            if height > 0:
-                ax.annotate(f"{height:.2f}", 
-                            (p.get_x() + p.get_width() / 2., height), 
-                            ha='center', va='bottom', 
-                            xytext=(0, 3), textcoords='offset points',
-                            fontsize=10, fontweight="bold")
+        # --- FIXED TITLE LOGIC ---
+        title, subtitle = TASK_TITLES.get(task, (task.upper(), ""))
+        
+        # Use ax.text instead of ax.set_title to mix font weights!
+        # y=1.15 places it 15% above the top of the plot
+        ax.text(0, 1.15, title, transform=ax.transAxes, fontsize=14, fontweight='bold', va='bottom', ha='left', color='#111111')
+        ax.text(0, 1.05, subtitle, transform=ax.transAxes, fontsize=10, fontweight='normal', va='bottom', ha='left', color='#666666')
+        
+        # Y-Axis styling
+        ax.set_ylim(0, 110)
+        ax.set_xlim(-0.8, 3.8)
+        ax.set_xticks([])
+        ax.set_yticks([0, 20, 40, 60, 80, 100])
+        ax.tick_params(axis='y', colors='#666666')
+        ax.grid(axis='y', color='#EEEEEE', linestyle='-', linewidth=1, zorder=0)
+        
+        for spine in ["top", "right", "bottom", "left"]:
+            ax.spines[spine].set_visible(False)
 
-        # Optional: Overlay Logos if provided
-        for j, model in enumerate(task_df["Model"].unique()):
-            if MODEL_LOGOS.get(model):
-                try:
-                    # Load image and put it above the bar
-                    logo = mpimg.imread(MODEL_LOGOS[model])
-                    ax.imshow(logo, extent=[j-0.15, j+0.15, 0.95, 1.05], aspect='auto', zorder=10)
-                except Exception as e:
-                    pass # Fail silently if logo missing
-
-    # 4. Global Formatting
-    fig.suptitle(f"Crowd-v1 vs Qwen Baselines (Model Size ~0.5B - 0.8B)", 
-                 fontsize=20, fontweight="bold", y=1.02)
+    # Legend
+    legend_patches = [
+        patches.Patch(color=COLORS["Crowd-v1"], label=f"Crowd-v1"),
+        patches.Patch(color=COLORS["Qwen3.5-0.8B"], label="Qwen3.5-0.8B"),
+        patches.Patch(color=COLORS["Qwen3-0.6B"], label="Qwen3-0.6B"),
+        patches.Patch(color=COLORS["Qwen2.5-0.5B"], label="Qwen2.5-0.5B"),
+    ]
     
+    fig.legend(handles=legend_patches, loc='lower center', ncol=4, 
+               bbox_to_anchor=(0.5, -0.02), frameon=False, fontsize=12, 
+               handlelength=1.5, handleheight=1.5)
+
+    # Adjust layout to prevent overlap and make room for titles + legend
     plt.tight_layout()
+    plt.subplots_adjust(bottom=0.1, hspace=0.35)
     
-    # 5. Save
     Path("results").mkdir(exist_ok=True)
     plt.savefig(OUTPUT_PATH, dpi=300, bbox_inches='tight')
     print(f"✅ Benchmarks grid saved to {OUTPUT_PATH}")
