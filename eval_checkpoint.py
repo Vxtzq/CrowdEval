@@ -137,12 +137,13 @@ def load_crowd_model(
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model-dir", type=Path, required=True)
+    # CHANGED: Defaults to current directory and local results folder
+    parser.add_argument("--model-dir", type=Path, default=Path("."), help="Path to checkpoint (default: current dir)")
     parser.add_argument("--tokenizer-dir", type=Path, default=None)
     parser.add_argument(
         "--code-dir", type=Path, default=Path(__file__).resolve().parent / "model_code"
     )
-    parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--output-dir", type=Path, default=Path("./results/json"), help="Where to save JSON (default: ./results/json)")
     parser.add_argument(
         "--tasks",
         default="hellaswag,piqa,arc_easy,winogrande,lambada_openai,mmlu",
