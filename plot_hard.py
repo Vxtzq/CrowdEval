@@ -191,10 +191,10 @@ def main():
     
     Path("results").mkdir(exist_ok=True)
     plt.savefig(OUTPUT_PATH, dpi=300, bbox_inches='tight', pad_inches=0.1, facecolor='white')
-    print(f"✅ Hard benchmarks grid saved to {OUTPUT_PATH}")
+
     
     # THIS POPS UP THE WINDOW
     plt.show()
-
+    print(f"✅ Hard benchmarks grid saved to {OUTPUT_PATH}")
 if __name__ == "__main__":
     main()
