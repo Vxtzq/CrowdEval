@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-"""Evaluate one Crowd-v1 flat-weight checkpoint with lm-evaluation-harness."""
-
 from __future__ import annotations
 
 import argparse
@@ -76,7 +73,6 @@ def load_crowd_model(
             initializer_range=raw_config["initializer_range"],
         )
     else:
-        # Early training commits use CrowdGPT's original camelCase config.
         config = CrowdConfig(
             vocab_size=raw_config["vocabSize"],
             hidden_size=raw_config["dim"],
@@ -175,10 +171,20 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    # Auto-download if no local dir provided
     if args.model_dir is None:
         print("No --model-dir provided. Auto-downloading Vxtzq/Crowd-v1 from Hugging Face...")
-        repo_path = snapshot_download(repo_id="Vxtzq/Crowd-v1")
+        repo_path = snapshot_download(
+            repo_id="Vxtzq/Crowd-v1",
+            allow_patterns=[
+                "config.json", 
+                "training_state.json", 
+                "model_bf16.safetensors", 
+                "engram_bf16.safetensors", 
+                "*.py", 
+                "*.model", 
+                "tokenizer*"
+            ]
+        )
         repo = Path(repo_path)
     else:
         repo = args.model_dir.resolve()
@@ -193,11 +199,9 @@ def main() -> None:
     print(f"Loading Crowd-v1 step {step} from {repo}", flush=True)
     tokenizer_dir = args.tokenizer_dir.resolve() if args.tokenizer_dir else None
     
-    # Ensure code_dir exists; if not, download from HF (optional)
     code_dir = args.code_dir.resolve()
     if not (code_dir / "configuration_crowd.py").exists():
         print(f"Warning: {code_dir} does not contain model code. Trying to use HF code...")
-        # Fallback: use the downloaded repo itself if it contains the code
         code_dir = repo
 
     model, tokenizer, metadata = load_crowd_model(
@@ -253,7 +257,6 @@ def main() -> None:
     out.write_text(json.dumps(payload, indent=2, ensure_ascii=False, default=str) + "\n")
     print(f"Saved {out}", flush=True)
 
-    # Generate console output AND prepare the markdown for the benchmark file
     md_lines = []
     md_lines.append(f"# Crowd-v1 Benchmark (Step {step})")
     md_lines.append(f"**Revision**: `{metadata['revision']}`")
