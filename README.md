@@ -20,6 +20,12 @@ then
 ```bash
 python plot_hard.py
 ```
+
+then
+
+```bash
+python plot_benchmark.py
+```
 This benchmarks the latest Crowd-v1 checkpoint on **gsm8k** and **gpqa**
 
 ## Crowd-v1 full base-model evaluation
