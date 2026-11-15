@@ -1,5 +1,9 @@
 # CrowdGPT evaluation toolkit
 
+## Installation
+```bash
+git clone https://github.com/Vxtzq/CrowdEval && cd CrowdEval
+```
 ## Singular benchmark (to push on the main repo to be seen on site)
 ```bash
 python evaluate.py --benchmark
