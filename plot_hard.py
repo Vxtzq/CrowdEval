@@ -101,11 +101,12 @@ def draw_bar(ax, x_pos, height, color, value, logo_path=None):
             
             ab = AnnotationBbox(
                 imagebox, (x_pos, height), 
-                xybox=(0, -22), 
+                # NUDGED LOWER: Changed from -22 to -26 to perfectly balance margins
+                xybox=(0, -26), 
                 boxcoords="offset points",
                 box_alignment=(0.5, 0.5),
                 frameon=True, 
-                bboxprops=dict(boxstyle="round,pad=0.4,rounding_size=0.2", 
+                bboxprops=dict(boxstyle="round,pad=0.4,rounding_size=0.3", 
                                facecolor="white", edgecolor="white", alpha=1.0),
                 zorder=5
             )
@@ -191,6 +192,9 @@ def main():
     Path("results").mkdir(exist_ok=True)
     plt.savefig(OUTPUT_PATH, dpi=300, bbox_inches='tight', pad_inches=0.1, facecolor='white')
     print(f"✅ Hard benchmarks grid saved to {OUTPUT_PATH}")
+    
+    # THIS POPS UP THE WINDOW
+    plt.show()
 
 if __name__ == "__main__":
     main()
