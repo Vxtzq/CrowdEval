@@ -6,7 +6,7 @@ git clone https://github.com/Vxtzq/CrowdEval && cd CrowdEval
 ```
 ## Singular benchmark (to push on the main repo to be seen on site)
 ```bash
-python evaluate.py --benchmark
+python eval_checkpoint.py --benchmark
 ```
 This benchmarks the latest Crowd-v1 checkpoint on **piqa**, **winogrande**, **arc_easy**, **mmlu**, **hellaswag** and **lambada-openai**
 ## Crowd-v1 full base-model evaluation
