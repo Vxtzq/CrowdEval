@@ -47,7 +47,6 @@ LOGOS = {
     "Qwen3.5-0.8B": "assets/logos/qwen35.png",
 }
 
-# SOMBER / GROUNDED COLORS
 COLORS = {
     "Crowd-v1": "#D1D5DB",      # Gray 300
     "Qwen3.5-0.8B": "#8B5CF6",  # Violet 500
@@ -65,21 +64,13 @@ def draw_gradient_bar(ax, x_pos, height, width, color_hex):
     
     h = height
     w = width
-    
     r_x = 0.15
     r_y = r_x * 25
     
-    # Custom path: perfectly flat bottom, rounded top
     verts = [
-        (x_pos - w/2, 0),             # bottom left
-        (x_pos - w/2, h - r_y),       # left edge up
-        (x_pos - w/2, h),             # top left control
-        (x_pos - w/2 + r_x, h),       # top left curve
-        (x_pos + w/2 - r_x, h),       # top edge
-        (x_pos + w/2, h),             # top right control
-        (x_pos + w/2, h - r_y),       # right edge down
-        (x_pos + w/2, 0),             # bottom right
-        (x_pos - w/2, 0)              # close to bottom left
+        (x_pos - w/2, 0), (x_pos - w/2, h - r_y), (x_pos - w/2, h), 
+        (x_pos - w/2 + r_x, h), (x_pos + w/2 - r_x, h), (x_pos + w/2, h), 
+        (x_pos + w/2, h - r_y), (x_pos + w/2, 0), (x_pos - w/2, 0)
     ]
     codes = [
         MplPath.MOVETO, MplPath.LINETO, MplPath.CURVE3, MplPath.CURVE3,
@@ -93,8 +84,6 @@ def draw_gradient_bar(ax, x_pos, height, width, color_hex):
     rgb = to_rgb(color_hex)
     gradient = np.zeros((100, 1, 4))
     gradient[:, :, :3] = rgb
-    
-    # Alpha fades from 0.55 (bottom) to 1.0 (top)
     gradient[:, :, 3] = np.linspace(0.55, 1.0, 100).reshape(-1, 1)
 
     im = ax.imshow(gradient, extent=(x_pos - w/2, x_pos + w/2, 0, h),
@@ -103,14 +92,12 @@ def draw_gradient_bar(ax, x_pos, height, width, color_hex):
 
 def draw_bar(ax, x_pos, height, color, value, logo_path=None):
     width = 0.6  
-    
     draw_gradient_bar(ax, x_pos, height, width, color)
     
     # Value Text
     ax.text(x_pos, height + 2, f"{value:.1f}", ha='center', va='bottom', 
             fontsize=11, fontweight='bold', color='#111111', zorder=4)
     
-    # THRESHOLD: Only draw logo if bar is taller than 15
     if height >= 15 and logo_path and Path(logo_path).exists():
         try:
             zoom_size = 0.12 if height > 20 else 0.08 
@@ -119,11 +106,12 @@ def draw_bar(ax, x_pos, height, color, value, logo_path=None):
             
             ab = AnnotationBbox(
                 imagebox, (x_pos, height), 
-                xybox=(0, -22), 
+                # CHANGED: -23 is the perfect middle ground, and pad=0.35 tightens the box
+                xybox=(0, -23), 
                 boxcoords="offset points",
                 box_alignment=(0.5, 0.5),
                 frameon=True, 
-                bboxprops=dict(boxstyle="round,pad=0.4,rounding_size=0.2", 
+                bboxprops=dict(boxstyle="round,pad=0.35,rounding_size=0.2", 
                                facecolor="white", edgecolor="white", alpha=1.0),
                 zorder=5
             )
@@ -206,6 +194,7 @@ def main():
     
     plt.savefig(OUTPUT_PATH, dpi=300, bbox_inches='tight', pad_inches=0.1, facecolor='white')
     print(f"✅ Benchmarks grid saved to {OUTPUT_PATH}")
+    plt.show()
 
 if __name__ == "__main__":
     main()
