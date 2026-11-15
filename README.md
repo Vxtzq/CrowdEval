@@ -3,6 +3,7 @@
 ## Installation
 ```bash
 git clone https://github.com/Vxtzq/CrowdEval && cd CrowdEval
+pip install -r requirements.txt
 ```
 ## Singular benchmark (to push on the main repo to be seen on site)
 ```bash
