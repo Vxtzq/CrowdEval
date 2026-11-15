@@ -10,6 +10,18 @@ pip install -r requirements.txt
 python eval_checkpoint.py --benchmark
 ```
 This benchmarks the latest Crowd-v1 checkpoint on **piqa**, **winogrande**, **arc_easy**, **mmlu**, **hellaswag** and **lambada-openai**
+## Harder benchmarks (GSM8K and GPQA)
+```bash
+python harder_bench.py
+```
+
+then
+
+```bash
+python plot_hard.py
+```
+This benchmarks the latest Crowd-v1 checkpoint on **gsm8k** and **gpqa**
+
 ## Crowd-v1 full base-model evaluation
 
 The evaluator reads the step-specific `model_bf16.safetensors` and
