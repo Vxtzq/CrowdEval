@@ -1,6 +1,8 @@
 # CrowdGPT evaluation toolkit
 
-## Crowd-v1 base-model evaluation
+## Singular benchmark (to push on the main repo to be seen on site)
+
+## Crowd-v1 full base-model evaluation
 
 The evaluator reads the step-specific `model_bf16.safetensors` and
 `engram_bf16.safetensors` files from the Hugging Face Git history, then runs
