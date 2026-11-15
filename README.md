@@ -1,7 +1,10 @@
 # CrowdGPT evaluation toolkit
 
 ## Singular benchmark (to push on the main repo to be seen on site)
-
+```bash
+python evaluate.py --benchmark
+```
+This benchmarks the latest Crowd-v1 checkpoint on **piqa**, **winogrande**, **arc_easy**, **mmlu**, **hellaswag** and **lambada-openai**
 ## Crowd-v1 full base-model evaluation
 
 The evaluator reads the step-specific `model_bf16.safetensors` and
