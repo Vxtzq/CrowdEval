@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -149,6 +150,11 @@ def main() -> None:
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--num-fewshot", type=int, default=None)
     parser.add_argument("--batch-size", type=int, default=4)
+    parser.add_argument(
+        "--benchmark", 
+        action="store_true", 
+        help="Run a single evaluation and save a concise markdown summary to results/benchmark.txt"
+    )
     args = parser.parse_args()
 
     repo = args.model_dir.resolve()
@@ -215,14 +221,45 @@ def main() -> None:
     out = args.output_dir / f"step_{step:04d}_{metadata['revision'][:8]}.json"
     out.write_text(json.dumps(payload, indent=2, ensure_ascii=False, default=str) + "\n")
     print(f"Saved {out}", flush=True)
+
+    # Generate console output AND prepare the markdown for the benchmark file
+    md_lines = []
+    md_lines.append(f"# Crowd-v1 Benchmark (Step {step})")
+    md_lines.append(f"**Revision**: `{metadata['revision']}`")
+    md_lines.append(f"**Params**: {metadata['parameter_count_loaded']}")
+    md_lines.append("")
+    md_lines.append("| Task | Metric | Value |")
+    md_lines.append("|---|---|---|")
+
     for task, metrics in payload["results"].items():
         preferred = [k for k in metrics if k.startswith("acc_norm,") or k == "acc_norm"]
         if not preferred:
             preferred = [k for k in metrics if k.startswith("acc,") or k == "acc"]
         if not preferred:
             preferred = list(metrics)
+        
+        # Console print (as before, showing top 2)
         values = ", ".join(f"{key}={metrics[key]}" for key in preferred[:2])
         print(f"{task}: {values}", flush=True)
+
+        # Markdown format (taking the primary metric)
+        main_key = preferred[0]
+        md_lines.append(f"| {task} | {main_key} | {metrics[main_key]:.4f} |")
+
+    # Save benchmark.txt if requested
+    if args.benchmark:
+        bench_dir = Path("results")
+        bench_dir.mkdir(parents=True, exist_ok=True)
+        bench_file = bench_dir / "benchmark.txt"
+        
+        # If the file exists, append; otherwise write header
+        mode = "a" if bench_file.exists() else "w"
+        with open(bench_file, mode) as f:
+            if mode == "a":
+                f.write("\n\n---\n\n")
+            f.write("\n".join(md_lines) + "\n")
+            
+        print(f"\n✅ Benchmark appended to {bench_file.absolute()}", flush=True)
 
 
 if __name__ == "__main__":
